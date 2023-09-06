@@ -11,6 +11,26 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 import numpy as np
 
+def estimate_fly_time(battery_voltage, battery_capacity, battery_efficiency, motor_count, thrust_to_weight_ratio, power_consumption_per_kg, total_weight):
+        # 計算最大起飛重量
+    max_takeoff_weight = thrust_to_weight_ratio * total_weight
+        
+        # 根據您的公式計算平均電流
+    avg_current = (max_takeoff_weight * power_consumption_per_kg) / battery_voltage
+        
+        # 計算電池總能量（mAh轉換成Ah）
+    total_battery_energy = battery_voltage * (battery_capacity / 1000) * (battery_efficiency / 100)
+        
+        # 計算飛行器的總平均功率消耗（W）
+    total_motor_power = motor_count * avg_current * battery_voltage
+        
+        # 估算飛行時間（小時）
+    estimated_fly_time_hr = total_battery_energy / total_motor_power
+        
+        # 轉換成分鐘
+    estimated_fly_time_min = estimated_fly_time_hr * 60
+        
+    return estimated_fly_time_min, max_takeoff_weight
 
 def naca4(series, c, N):
     series_str = str(series)
@@ -179,6 +199,34 @@ class LiftCalculator(QWidget):
         
         # 將 layout 加入到 tab1_layout
         self.tab1_layout.addLayout(layout)
+    def calculate_lift(self):
+        try:
+            angle = float(self.angle_input.text())
+            rho = float(self.rho_input.text())
+            area = float(self.area_input.text())
+            rpm = float(self.rpm_input.text())
+            length = float(self.length_input.text())
+            blades = float(self.blades_input.text())  # 讀取槳葉數量
+
+            # 計算升力係數，這裡可以用槳葉數量來做調整
+            # 0.1 *(0.1*3)
+            cl = 0.1 * angle * blades  # 假設升力係數與槳葉數量成正比，這是一個非常簡單的模型！
+
+            # Calculate tip speed
+            omega = rpm * 2 * math.pi / 60
+            speed = omega * length
+
+            # Calculate Lift in N
+            lift = 0.5 * cl * rho * area * math.pow(speed, 2)
+
+            # Convert Lift to Gram-force
+            lift_gf = lift / 9.80665
+
+            # Display result
+            self.result_label.setText(f"升力 (L): {lift} N<br/>升力（克數）: {lift_gf} gf")
+
+        except ValueError:
+            self.result_label.setText("請輸入有效的數字。")
 
     def initNACATab(self):
         layout = QVBoxLayout()
@@ -241,40 +289,88 @@ class LiftCalculator(QWidget):
         self.ax.set_title('NACA ' + series)
         self.canvas.draw()
 
-    def initFlightTimeTab(self):
-        # 在這裡加入有關飛行時長估算的界面元素和代碼
-        pass
-    def calculate_lift(self):
+
+
+
+    
+
+
+    def calculate_flight_time_and_weight(self):
         try:
-            angle = float(self.angle_input.text())
-            rho = float(self.rho_input.text())
-            area = float(self.area_input.text())
-            rpm = float(self.rpm_input.text())
-            length = float(self.length_input.text())
-            blades = float(self.blades_input.text())  # 讀取槳葉數量
-
-            # 計算升力係數，這裡可以用槳葉數量來做調整
-            # 0.1 *(0.1*3)
-            cl = 0.1 * angle * blades  # 假設升力係數與槳葉數量成正比，這是一個非常簡單的模型！
-
-            # Calculate tip speed
-            omega = rpm * 2 * math.pi / 60
-            speed = omega * length
-
-            # Calculate Lift in N
-            lift = 0.5 * cl * rho * area * math.pow(speed, 2)
-
-            # Convert Lift to Gram-force
-            lift_gf = lift / 9.80665
-
-            # Display result
-            self.result_label.setText(f"升力 (L): {lift} N<br/>升力（克數）: {lift_gf} gf")
-
+            battery_voltage = float(self.battery_voltage_edit.text())
+            battery_capacity = float(self.battery_capacity_edit.text())
+            battery_efficiency = float(self.battery_efficiency_edit.text())
+            motor_count = int(self.motor_count_edit.text())
+            thrust_to_weight_ratio = float(self.thrust_to_weight_ratio_edit.text())
+            power_consumption_per_kg = float(self.power_consumption_per_kg_edit.text())
+            total_weight = float(self.total_weight_edit.text())
         except ValueError:
-            self.result_label.setText("請輸入有效的數字。")
+            self.result_label.setText("輸入無效，請確保所有欄位都填寫了有效的數字。")
+            return
 
+        estimated_fly_time_min, max_takeoff_weight = estimate_fly_time(
+            battery_voltage, 
+            battery_capacity, 
+            battery_efficiency, 
+            motor_count, 
+            thrust_to_weight_ratio, 
+            power_consumption_per_kg, 
+            total_weight
+        )
 
+        self.result_label.setText(
+            f"預估飛行時間：{estimated_fly_time_min:.2f} 分鐘\n最大起飛重量：{max_takeoff_weight:.2f} 公斤"
+        )
 
+    def initFlightTimeTab(self):
+        layout = QVBoxLayout()
+
+        # 電池電壓
+        self.battery_voltage_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入電池電壓（V）："))
+        layout.addWidget(self.battery_voltage_edit)
+
+        # 電池容量
+        self.battery_capacity_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入電池容量（mAh）："))
+        layout.addWidget(self.battery_capacity_edit)
+
+        # 電池效率
+        self.battery_efficiency_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入電池效率（%）："))
+        layout.addWidget(self.battery_efficiency_edit)
+
+        # 馬達數量
+        self.motor_count_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入馬達數量："))
+        layout.addWidget(self.motor_count_edit)
+
+        # 推重比
+        self.thrust_to_weight_ratio_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入推重比："))
+        layout.addWidget(self.thrust_to_weight_ratio_edit)
+
+        # 每公斤功耗
+        self.power_consumption_per_kg_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入每公斤功耗（W/kg）："))
+        layout.addWidget(self.power_consumption_per_kg_edit)
+
+        # 總重量
+        self.total_weight_edit = QLineEdit(self)
+        layout.addWidget(QLabel("請輸入總重量（kg）："))
+        layout.addWidget(self.total_weight_edit)
+
+        # 計算按鈕
+        self.calc_btn = QPushButton("估算", self)
+        self.calc_btn.clicked.connect(self.calculate_flight_time_and_weight)
+        layout.addWidget(self.calc_btn)
+
+        # 計算結果標籤
+        self.result_label = QLabel("待計算...", self)
+        layout.addWidget(self.result_label)
+
+        # 設置佈局
+        self.tab3.setLayout(layout)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
